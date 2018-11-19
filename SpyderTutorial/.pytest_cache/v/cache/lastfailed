@@ -1,0 +1,3 @@
+{
+  "scipy/linalg/tests/test_decomp_update.py::TestQRdelete_F::()::test_delete_last_p_col": true
+}
