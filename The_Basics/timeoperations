@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri May 12 10:07:54 2023
+
+An experiment with time
+
+@author: jovillal
+"""
+
+import time
+from datetime import datetime, date, timedelta
+start_time = date.today()
+
+# today = date.today()
+# print(today)
+# #today == date.fromtimestamp(time.time())
+# my_birthday = date(today.year, 4, 20)
+# if my_birthday < today:
+#     my_birthday = my_birthday.replace(year=today.year + 1)
+# print(my_birthday)
+# time_to_birthday = abs(my_birthday - today)
+# print(time_to_birthday.days)
+
+# class TimeInterval():
+    
+#     def __init__(self):
+#         self.t0 = datetime.now().timestamp()
+
+# t_order=TimeInterval()
+# print("torder " + str(t_order.t0))
+# time.sleep(2)
+# print("torder " + str(t_order.t0))
+# t_2 = TimeInterval()
+# print("torder " + str(t_order.t0))
+# print("t2 " + str(t_2.t0))
+# print("Difference " + str(t_2.t0 - t_order.t0))
+
+
+now= datetime.now()
+tQuote=input("Enter quote time (hour(00-23):minute(00-59):seconds(00-59)): ")
+tQuote = datetime(
+    now.year,
+    now.month,
+    now.day,
+    hour=int(tQuote[:2]),
+    minute=int(tQuote[3:5]),
+    second = int(tQuote[6:])
+    )
+    
+elapsed =  now - tQuote
+
+print(type(elapsed))
+print(elapsed)          
+#if(elapsed >= max_wait or elapsed < timedelta(minutes=0)):
+
+print(elapsed >= timedelta(minutes=16))
+print(elapsed < timedelta(minutes=0))
+
+# tod="0"
+# while len(tod) !=8:
+#     tod=input("Enter quote time (hour(00-23):minute(00-59):seconds(00-59)): ")
+    
+# start_time = timedelta(
+#     hours=int(tod[:2]),
+#     minutes=int(tod[3:5]),
+#     seconds = int(tod[6:])
+#     )
+
+# now = datetime.now() 
+# now = timedelta(
+#     hours=now.hour,
+#     minutes=now.minute,
+#     seconds = now.second
+#     ) 
+# print(now)
+
+# print(now - start_time)
+
+#a simple wait loop
+
+#order=False
+
+"""
+lap = timedelta(seconds=30)
+elapsed = date.today() - start_time
+max_wait = timedelta(minutes=2)
+
+while( not order and elapsed < max_wait):
+    # change the state of order
+    time.sleep(30)
+    elapsed = elapsed + lap
+    print(elapsed)
+    print(elapsed < max_wait)
+    
+"""
