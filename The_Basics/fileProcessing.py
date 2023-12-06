@@ -30,4 +30,15 @@ def count_char(path, char):
     return string.count(char)
 
 print("For the bear.txt file, the letter \'a\' occurs", count_char("bear.txt",'a'), "times")
+
+filename = 'new.csv'
+try:
+    with open(filename, 'a') as f:
+        f.write("whateverx2")
+        print("Text appended to file " + filename + " successfully.")
+except IOError:
+    print("Error: could not append to file " + filename)
+    
+with open('a'+filename, 'r') as f:
+        f.write("whateverx2")
     

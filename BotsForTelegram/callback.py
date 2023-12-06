@@ -43,20 +43,22 @@ from telegram.ext import (
     filters,
     )
 
-QUOTEALIVE = datetime.timedelta(minutes=2) 	#the time for the quotations to stay valid
+QUOTEALIVE = datetime.timedelta(minutes=7) 	#the time for the quotations to stay valid
 DEFAULTAMOUNT = 10000  						#A default transaction amount
+THRESHOLD_COP = 120000000
+START_TIME, END_TIME = "8:15:00", "13:45:00"
+
 quote_ID = 0
 
 class TextMessages:
-    hello = "Hello Bitso!\nThis is KraviBot chat, (Kravata’s virtual assistant)."
-    outside_hours = "We are outside office hours."
-    holiday = "Today is a holiday in Colombia."
-    #TODO: poder cambiar las horas de funcionamiento
-    hours = "Remember, we are here to help during our business hours (*Colombia Time*): *Monday through Friday from 8:15 to 13:45*."
+    hello = "Hello Bitso\!\nThis is KraviBot chat, \(Kravata's virtual assistant\)\."
+    outside_hours = "We are outside office hours\."
+    holiday = "Today is a holiday in Colombia\."
+    hours = f"Remember, we are here to help during our business hours \(*Colombia Time*\): *Monday through Friday from {START_TIME} to {END_TIME}*."
     help = "I can help you with the following actions related to your account:"
     choose = 'Please choose one of the following:'
-    thanks = "Thank you for using Kravibot: web3 made simple for everyone."
-    bye = "Have an excellent day!"
+    thanks = "Thank you for using Kravibot: web3 made simple for everyone\."
+    bye = "Have an excellent day\!"
 
 class Memory:
     """Memory is a dictionary with the following structure:
@@ -81,11 +83,21 @@ class Memory:
 	}"""
     chats = {}
         
-order_keyboard = [
-	[
-	InlineKeyboardButton("Accept the quote", callback_data='A'),
-	InlineKeyboardButton("Refresh", callback_data='B'),
-    ],
+class Keyboard:       
+	order_keyboard = [
+		[
+		InlineKeyboardButton("Accept the quote", callback_data='A'),
+		InlineKeyboardButton("Refresh", callback_data='B'),
+    	],
+    	[
+		InlineKeyboardButton("New USDT Off Ramp quote", callback_data='C'),
+		InlineKeyboardButton("New USDC Off Ramp quote", callback_data='D'),
+    	],
+    	[
+		InlineKeyboardButton("Available quotes", callback_data='E'),
+    	],]
+
+	short_keyboard = [
     [
 	InlineKeyboardButton("New USDT Off Ramp quote", callback_data='C'),
 	InlineKeyboardButton("New USDC Off Ramp quote", callback_data='D'),
@@ -94,16 +106,7 @@ order_keyboard = [
 	InlineKeyboardButton("Available quotes", callback_data='E'),
     ],]
 
-short_keyboard = [
-    [
-	InlineKeyboardButton("New USDT Off Ramp quote", callback_data='C'),
-	InlineKeyboardButton("New USDC Off Ramp quote", callback_data='D'),
-    ],
-    [
-	InlineKeyboardButton("Available quotes", callback_data='E'),
-    ],]
-
-start_keyboard = [
+	start_keyboard = [
     [
         InlineKeyboardButton("New USDT Off Ramp quote", callback_data='C'),
         InlineKeyboardButton("New USDC Off Ramp quote", callback_data='D'),
@@ -144,33 +147,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         #TODO: ¿limpiar los usuarios al iniciar el día?
         if not update.effective_user.id in Memory.chats: # Crear el usuario
             Memory.chats[update.effective_user.id] = {"name": update.effective_user.full_name, "active_quote": 'NONE', "quotes":{}}
-        reply_markup = InlineKeyboardMarkup(start_keyboard)
+        reply_markup = InlineKeyboardMarkup(Keyboard.start_keyboard)
         msg = TextMessages.hello + '\n' + TextMessages.help + '\n'
         # Send message with text and appended InlineKeyboard
-        await update.message.reply_text(msg, reply_markup=reply_markup)
+        await update.message.reply_text(msg, reply_markup=reply_markup, parse_mode='MarkdownV2')
         # Tell ConversationHandler that we're in state `FIRST` now
         return START_ROUTES
+
  
 async def start_over(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Prompt same text & keyboard as `start` does but not as new message"""
     reply_markup = InlineKeyboardMarkup(start_keyboard)
     msg = TextMessages.hello + '\n' + TextMessages.help + '\n'
-    await update.message.reply_text(msg, reply_markup=reply_markup)
+    await update.message.reply_text(msg, reply_markup=reply_markup, parse_mode='MarkdownV2')
     return START_ROUTES
  
 async def process_market_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 	chat_id = update.effective_user.id
 	query = update.callback_query
-	#TODO: revisar que la quote esté válida
-	if __is_quote_void(chat_id, Memory.chats[chat_id]['active_quote']):
-		msg = f""""This quote has expired, they are only valid for {QUOTEALIVE} minutes. Please obtain a new one."""
-		await query.edit_message_text(text = msg, reply_markup = InlineKeyboardMarkup(short_keyboard))
-		return START_ROUTES
-        
 	active_quote = Memory.chats[chat_id]['active_quote']
+	if not __is_quote_void(chat_id, active_quote):
+		msg = f""""This quote has expired, they are only valid for {QUOTEALIVE} minutes\. Please obtain a new one\."""
+		await query.edit_message_text(text = msg, reply_markup = InlineKeyboardMarkup(Keyboard.short_keyboard), parse_mode='MarkdownV2')
+		return START_ROUTES
+        	
 	data =  Memory.chats[chat_id]['quotes'][active_quote]
-	await update.effective_message.reply_text((f'''Please type the amount you wish to sell (greater than *500 {data['token']}*).
-		Write the amount without using periods or commas (“.” or “,”).''').replace("\t", ""))
+	await update.effective_message.reply_text((f'''Please type the amount you wish to sell \(greater than *500 {data['token']}*\)\.
+		Write the amount without using periods or commas \(“\.” or “,”\)\.''').replace("\t", ""), parse_mode='MarkdownV2')
 	return TEXT_ROUTES	
 	
 async def refresh_quote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -185,7 +188,6 @@ async def refresh_quote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     active_quote = Memory.chats[chat_id]['active_quote']
     data =  Memory.chats[chat_id]['quotes'][active_quote]
     token = data['token']
-    old_ramp = data['ramp_ID']
     #generar el quote en token
     #get the quote
     #TODO: poner el generador que es
@@ -213,14 +215,15 @@ async def refresh_quote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 			Valid until: {data['date_end'].strftime("%d/%m/%Y, %H:%M:%S")}
 			Operation: Off Ramp
 			Active and reference: {token}/COP
-			`{Memory.chats[chat_id]["active_quote"]}: {token}/COP Quote: { '${:,.1f}'.format(rate) }, valid until {data['date_end'].strftime("%d/%m/%Y, %H:%M:%S")}`
+			`{Memory.chats[chat_id]["active_quote"]}: {token}/COP Quote: { '${:,.1f}'.format(rate) }, valid until {data['date_end'].strftime("%d/%m/%Y, %H:%M:%S")}
+			*WARNING:* This is a test version, we will not accept this quote.`
             """).replace("\t", "") + '\n' + TextMessages.choose + '\n'
     
-    await query.edit_message_text(text = msg, reply_markup = InlineKeyboardMarkup(order_keyboard),parse_mode='MarkdownV2')
+    await query.edit_message_text(text = msg, reply_markup = InlineKeyboardMarkup(Keyboard.order_keyboard), parse_mode='MarkdownV2')
     # Tell ConversationHandler that we're in state `FIRST` now
     return START_ROUTES   
 
-async def new_USDT_quote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def new_quote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 	
     global quote_ID
     
@@ -265,76 +268,31 @@ async def new_USDT_quote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 			Valid until: {data['date_end'].strftime("%d/%m/%Y, %H:%M:%S")}
 			Operation: Off Ramp
 			Active and reference: {token}/COP
-			`{Memory.chats[chat_id]["active_quote"]}: {token}/COP Quote: { '${:,.1f}'.format(rate) }, valid until {data['date_end'].strftime("%d/%m/%Y, %H:%M:%S")}`
+			`{Memory.chats[chat_id]["active_quote"]}: {token}/COP Quote: { '${:,.1f}'.format(rate) }, valid until {data['date_end'].strftime("%d/%m/%Y, %H:%M:%S")}
+			*WARNING:* This is a test version, we will not accept this quote.`
             """).replace("\t", "") + '\n' + TextMessages.choose + '\n'
     
-    await query.edit_message_text(text = msg, reply_markup = InlineKeyboardMarkup(order_keyboard))
-    # Tell ConversationHandler that we're in state `FIRST` now
-    return START_ROUTES
-
-async def new_USDC_quote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-	
-    global quote_ID
-    
-    query = update.callback_query
-    # create the quote ID
-    quote_ID += 1
-    if len(str(quote_ID)) == 6:
-        quote_ID = 1
-       
-    chat_id = update.effective_user.id
-
-    token = 'USDC'            
-    #generar el quote en USDT
-    #get the quote
-    #TODO: poner el generador que es
-	#rate = await __get_rate(context, chat_id, "USDT"", 1000)
-    rate = uniform(3800.00, 4500.00)
-    ramp = await __create_ramp(context, chat_id, token, DEFAULTAMOUNT, rate) #create the ramp 	
-        
-    data = {
-        "ramp_ID": ramp['id'],
-        "operation": ramp['rampType'],
-        'date_start': datetime.datetime.now(pytz.timezone('America/Bogota')),
-        'date_end': datetime.datetime.now(pytz.timezone('America/Bogota')) + QUOTEALIVE,
-        'token' : token,
-        'reference' : 'COP',
-        'rate' : rate
-	}
-    
-    Memory.chats[chat_id]["active_quote"] = str(quote_ID).zfill(5)  #update this quote to be the active quote
-    Memory.chats[chat_id]["quotes"][str(quote_ID).zfill(5)] = data
-    
-	#TODO: Entender qué hace esto.
-    # context.job_queue.run_repeating(__close_quota, 600, first=600, chat_id=chat_id, name="close_quota_" + str(chat_id) + "_" + data['token'], data=data)
-    
-    msg = (f"""*Quote details*:
-			Quote ID: {Memory.chats[chat_id]["active_quote"]}
-			Quote time: {data['date_start'].strftime("%d/%m/%Y, %H:%M:%S")}
-			Valid until: {data['date_end'].strftime("%d/%m/%Y, %H:%M:%S")}
-			Operation: Off Ramp
-			Active and reference: {token}/COP
-			`{Memory.chats[chat_id]["active_quote"]}: {token}/COP Quote: { '${:,.1f}'.format(rate) }, valid until {data['date_end'].strftime("%d/%m/%Y, %H:%M:%S")}`
-            """).replace("\t", "") + '\n' + TextMessages.choose + '\n'
-    
-    await query.edit_message_text(text = msg, reply_markup =  InlineKeyboardMarkup(order_keyboard))
+    await query.edit_message_text(text = msg, reply_markup = InlineKeyboardMarkup(Keyboard.order_keyboard), parse_mode='MarkdownV2')
     # Tell ConversationHandler that we're in state `FIRST` now
     return START_ROUTES
 
 async def list_quotes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     chat_id = update.effective_user.id
-    __is_quote_void(chat_id, Memory.chats[chat_id]['active_quote']) #remove void quotations
+    await __is_quote_void(chat_id, Memory.chats[chat_id]['active_quote']) #remove void quotations
     data = Memory.chats[chat_id]['quotes']
     msg = ''
     # print quotes
     for quote_ID in data.keys():
-        msg += (f'''Quote ID: {quote_ID}: 
-		{ '${:,.1f}'.format(data[quote_ID]['rate']) } {data[quote_ID]['token']}/COP. 
-		valid until: {data[quote_ID]['date_end'].strftime("%H:%M:%S")}.''').replace("\t", "").replace("\n", "") + '\n'+'\n'
-    msg += 'Please type the *Quote ID* you want to operate on (accept or refresh).'
-    await query.answer()
-    await update.effective_message.reply_text(msg)
+        rate = float(data[quote_ID]['rate'])
+        i, d = divmod(rate, 1)
+        rate = str(int(i)) + '\.' + str(d)[2:3]
+        msg += (f'''Quote ID {quote_ID}: 
+		${rate} {data[quote_ID]['token']}/COP\.       
+		*This is a simulation* valid until: {data[quote_ID]['date_end'].strftime("%H:%M:%S")}\.''').replace("\t", "").replace("\n", "") +'\n'
+    msg += '\nPlease type the *Quote ID* you want to operate on \(accept or refresh\)\.'
+    #await query.answer()
+    await update.effective_message.reply_text(msg, parse_mode='MarkdownV2')
     return QUOTE_ROUTES
    
 async def volume(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -350,12 +308,18 @@ async def volume(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     volumeUSDC = [uniform(38000.00, 45050.00) for i in range(5)]
     volumeUSDT = [uniform(38000.00, 45050.00) for i in range(5)]
     volumeCOP = [volumeUSDC[i] * uniform(3800.00, 4505.00) + volumeUSDT[i] * uniform(3800.00, 4505.00) for i in range(len(volumeUSDT))]
-    msg = (f"""*Processed Volume*.
-
-		Today's processed volume sums to {'${:,.2f}'.format(sum(volumeUSDT))} USDT. and {'${:,.2f}'.format(sum(volumeUSDC))} USDC.
-		The total amount of processed COP is {'${:,.2f}'.format(sum(volumeCOP))}""").replace("\t", "")
-    reply_markup = InlineKeyboardMarkup(start_keyboard)
-    await query.edit_message_text(msg, reply_markup=reply_markup)
+    i, d = divmod(sum(volumeUSDC), 1)
+    volumeUSDC = str(int(i)) + '\.' + str(d)[2:4]
+    i, d = divmod(sum(volumeUSDT), 1)
+    volumeUSDT = str(int(i)) + '\.' + str(d)[2:4]
+    i, d = divmod(sum(volumeCOP), 1)
+    volumeCOP = str(int(i)) + '\.' + str(d)[2:4]
+    msg = (f"""*Processed Volume*
+		Today's processed volume sums to ${volumeUSDT} USDT, and ${volumeUSDC} USDC\.
+		The total amount of processed COP is ${volumeCOP}\.
+		*WARNING:* These are not real values, they are pseudo random numbers\.""").replace("\t", "")
+    reply_markup = InlineKeyboardMarkup(Keyboard.start_keyboard)
+    await update.effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode='MarkdownV2')
     return START_ROUTES
  
 
@@ -363,23 +327,27 @@ async def quote_operations(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     chat_id = update.effective_user.id
     active_quote = update.message.text
     active_quote = active_quote.zfill(5)
-    if __is_quote_void(chat_id, active_quote):
+    if await __is_quote_void(chat_id, active_quote):
         msg = (f"""*Quote selection*:
-		The provided quote ID ({active_quote}) is either non valid or has expired.""").replace("\t", "") + '\n' + TextMessages.choose + '\n'
-        reply_markup = InlineKeyboardMarkup(start_keyboard)
+		The provided quote ID \({active_quote}\) is either non valid or has expired\.""").replace("\t", "") + '\n' + TextMessages.choose + '\n'
+        reply_markup = InlineKeyboardMarkup(Keyboard.start_keyboard)
     else:
         Memory.chats[chat_id]['active_quote'] = active_quote  #update de quote
         data = Memory.chats[chat_id]['quotes'][active_quote]
+        rate = float(data['rate'])
+        i, d = divmod(rate, 1)
+        rate = str(int(i)) + '\.' + str(d)[2:3]
         msg = (f"""*Quote selection*:
-		{Memory.chats[chat_id]["name"]}, you have selected quote {Memory.chats[chat_id]['active_quote']}.
+		{Memory.chats[chat_id]["name"]}, you have selected quote {Memory.chats[chat_id]['active_quote']}\.
 		Details:
 		Quote ID: {active_quote}
 		Valid until: {data['date_end'].strftime("%H:%M:%S")}
 		Operation: Off Ramp
-		Quote: {'${:,.1f}'.format(data['rate'])} {data['token']}/COP
-		`{Memory.chats[chat_id]["active_quote"]}: {data['token']}/COP Quote: { '${:,.1f}'.format(data['rate']) }, valid until {data['date_end'].strftime("%d/%m/%Y, %H:%M:%S")}`""").replace("\t", "") + '\n'
-        reply_markup = InlineKeyboardMarkup(order_keyboard)
-    await update.message.reply_text(msg, reply_markup=reply_markup)
+		Quote: ${rate} {data['token']}/COP
+		`{Memory.chats[chat_id]["active_quote"]}: {data['token']}/COP Quote: ${rate}, valid until {data['date_end'].strftime("%d/%m/%Y, %H:%M:%S")}
+		*WARNING:* This is a test version, we will not accept this quote\.`""").replace("\t", "") + '\n'
+        reply_markup = InlineKeyboardMarkup(Keyboard.order_keyboard)
+    await update.message.reply_text(msg, reply_markup=reply_markup, parse_mode='MarkdownV2')
     return START_ROUTES
 
 async def place_market_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -390,34 +358,36 @@ async def place_market_order(update: Update, context: ContextTypes.DEFAULT_TYPE)
         amount = int(update.message.text)
     except ValueError: 
         msg = (f"""*Order confirmation*
-		{Memory.chats[chat_id]["name"]}, the amount you have typed is not a numeric value. Please try again
-        Type the amount you wish to sell (greater than *500 {data['token']}*).
-		Write the amount without using periods or commas (“.” or “,”).""").replace("\t", "") + '\n'
-        await update.effective_message.reply_text(msg)
+		{Memory.chats[chat_id]["name"]}, the amount you have typed is not a numeric value\. Please try again\.
+		Type the amount you wish to sell \(greater than *500 {data['token']}*\), without using periods or commas \(“\.” or “,”\)\.
+        """).replace("\t", "")
+        await update.effective_message.reply_text(msg, parse_mode='MarkdownV2')
         return TEXT_ROUTES	
     if amount <= 500:
         msg = (f"""*Order confirmation*
-		{Memory.chats[chat_id]["name"]}, the amount you have typed is less than the minimun order. Please try again
-        Type the amount you wish to sell (greater than *500 {data['token']}*).
-		Write the amount without using periods or commas (“.” or “,”).""").replace("\t", "") + '\n'
-        await update.effective_message.reply_text(msg)
+		{Memory.chats[chat_id]["name"]}, the amount you have typed is less than the minimun order\. Please try again\.
+		Type the amount you wish to sell \(greater than *500 {data['token']}*\), without using periods or commas \(“\.” or “,”\)\.
+		""").replace("\t", "")
+        await update.effective_message.reply_text(msg, parse_mode='MarkdownV2')
         return TEXT_ROUTES
     else:
         Memory.chats[chat_id]['quotes'][active_quote]['amount'] = amount
         #TODO revisar si hay fondos
 		#TODO: poner la orden
 		#TODO: revisar que quedó plata (esto lo debe haer el market maker)
+        rate = float(data['rate'])
+        i, d = divmod(rate, 1)
+        rate = str(int(i)) + '\.' + str(d)[2:3]
         msg = (f"""*Order confirmation*
-			{Memory.chats[chat_id]["name"]}, we confirm we have received your request.
-			We will check that the order is correctly placed in the order book and that the relevant amounts for this operation are available!
+			{Memory.chats[chat_id]["name"]}, we confirm we have received your request, remember that this is a *simulation*\.
+			We will check that the order is correctly placed in the order book and that the relevant amounts for this operation are available\!
 			Details:
 			Quote ID: {active_quote}
 			Quote time: {data['date_start'].strftime("%d/%m/%Y, %H:%M:%S")}
 			Operation: Off Ramp
-			Active and reference: {data['token']}/COP
-			Amount: { '$ {:,.2f}'.format(amount) } {data['token']}""").replace("\t", "") + '\n'
-    reply_markup = InlineKeyboardMarkup(start_keyboard)
-    await update.message.reply_text(msg, reply_markup=reply_markup)
+			Rate: ${rate} {data['token']}/COP
+			Amount: ${amount} {data['token']}""").replace("\t", "") + '\n'
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(Keyboard.start_keyboard), parse_mode='MarkdownV2')
     return START_ROUTES
 
 async def __create_ramp(context, chat_id, token, amount, rate):
@@ -442,7 +412,7 @@ async def __create_ramp(context, chat_id, token, amount, rate):
 
 #check if the active quote is valid (returns True is the quote has expired or doesn't exists, False if the quote is valid), 
 # removes all invalid quotes from memory for the active user
-def __is_quote_void(chat_id, quote_key):
+async def __is_quote_void(chat_id, quote_key):
     try:
         int(quote_key)
     except ValueError: 
@@ -478,8 +448,8 @@ def main() -> None:
             START_ROUTES: [
                 CallbackQueryHandler(process_market_order, pattern="^" + 'A' + "$"),
                 CallbackQueryHandler(refresh_quote, pattern="^" + 'B' + "$"),
-                CallbackQueryHandler(new_USDT_quote, pattern="^" + 'C' + "$"),
-                CallbackQueryHandler(new_USDT_quote, pattern="^" + 'D' + "$"),
+                CallbackQueryHandler(new_quote, pattern="^" + 'C' + "$"),
+                CallbackQueryHandler(new_quote, pattern="^" + 'D' + "$"),
                 CallbackQueryHandler(list_quotes, pattern="^" + 'E' + "$"),
                 CallbackQueryHandler(volume, pattern="^" + 'F' + "$"),
             ],
